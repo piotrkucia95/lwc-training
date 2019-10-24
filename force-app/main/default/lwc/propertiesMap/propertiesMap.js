@@ -1,9 +1,8 @@
+/* eslint-disable no-debugger */
 /* eslint-disable no-console */
 import { LightningElement, api, track, wire } from 'lwc';
 import { getRecord } from 'lightning/uiRecordApi';
-import { registerListener, unregisterAllListeners } from 'c/pubsub';
 import { CurrentPageReference } from 'lightning/navigation';
-import { refreshApex } from '@salesforce/apex';
 import findProperties from '@salesforce/apex/SimilarPropertyController.getSimilarProperties';
 
 const fields = [
@@ -14,7 +13,7 @@ const fields = [
     'Property__c.Broker__c'
 ]
 
-export default class SimilarProperties extends LightningElement {
+export default class PropertiesMap extends LightningElement {
 
     @api recordId;
     @track props;
@@ -22,16 +21,19 @@ export default class SimilarProperties extends LightningElement {
     @track property;
     @track price;
     @track beds;
-    @api searchCriteria = 'Price';
+    @api searchCriteria = 'Location';
     @api priceRange = '100000';
-    @track noData;
+    @api locationRange = '1000';
+    @track cardTitle;
+    @track mapMarkers = [];
                 
     @wire(findProperties, { 
         recordId: '$recordId',
         priceRange: '$priceRange',
         price: '$price',
         searchCriteria: '$searchCriteria',
-        beds: '$beds'
+        beds: '$beds',
+        locationRange: '$locationRange'
     })
     wiredProps(value) {
         this.wiredRecords = value;
@@ -40,18 +42,14 @@ export default class SimilarProperties extends LightningElement {
             console.log("ERROR: ", this.errorMsg);
         } else if (value.data) {
             this.props = value.data;
-            if (this.props && this.props.length === 0){
-                this.noData = true;
-            } else {
-                this.noData = false;
-            }
+            this.handlePropertiesListUpdate(value.data);
         }
         
     }
 
     @wire(getRecord, {recordId: '$recordId', fields})
     wiredProperty(value) {
-        if(value.data) {
+        if (value.data) {
             this.property = value.data;
             this.price = this.property.fields.Price__c.value;
             this.beds = this.property.fields.Beds__c.value;
@@ -62,18 +60,22 @@ export default class SimilarProperties extends LightningElement {
 
     @wire(CurrentPageReference) pageRef;
 
-    connectedCallback() {
-        registerListener('propertyUpdated', this.refreshSelection, this);
-    }
-        
-    disconnectedCallback() {
-        unregisterAllListeners(this);
-    }
-    refreshSelection() {
-        refreshApex(this.wiredRecords);
+    handlePropertiesListUpdate(properties) {
+        console.log('properties')
+        console.log(properties);
+        this.mapMarkers = properties.map(property => {
+            const Latitude = property.Location__Latitude__s;
+            const Longitude = property.Location__Longitude__s;
+            return {
+                location: { Latitude, Longitude },
+                title: property.Name,
+                description: `Coords: ${Latitude}, ${Longitude}`
+            };
+        });
     }
 
-    renderedCallback() {
-        this.cardTitle = 'Similar Properties by ' + this.searchCriteria;
+    handleClick() {
+        console.log(this.props);
     }
+
 }
